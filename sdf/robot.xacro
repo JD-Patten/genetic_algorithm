@@ -1,0 +1,336 @@
+<sdf xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+
+    <xacro:property name="base_friction" value="0.75"/>
+    <xacro:property name="arm_friction" value="0.28"/>
+
+    <xacro:property name="servo_height" value="0.043"/>
+    <xacro:property name="draft_angle" value="-0.349066"/>
+
+    <xacro:property name="_120_degrees" value="2.0944"/>
+    <xacro:property name="_240_degrees" value="4.18879"/>
+    <xacro:property name="_180_degrees" value="3.14159"/>
+
+    <xacro:property name="servo1_x" value="-0.06899"/>
+    <xacro:property name="servo1_y" value="0.04750"/>
+    <xacro:property name="servo2_x" value="-0.00664"/>
+    <xacro:property name="servo2_y" value="0.08350"/>
+    <xacro:property name="servo3_x" value="0.07563"/>
+    <xacro:property name="servo3_y" value="0.03600"/>
+    <xacro:property name="servo4_x" value="0.07563"/>
+    <xacro:property name="servo4_y" value="-0.03600"/>
+    <xacro:property name="servo5_x" value="-0.00664"/>
+    <xacro:property name="servo5_y" value="-0.08350"/>
+    <xacro:property name="servo6_x" value="-0.06899"/>
+    <xacro:property name="servo6_y" value="-0.04750"/>
+
+    <xacro:property name="arm_length" value="0.065"/>
+
+
+    <model name='skipper' canonical_link='base_link'>
+
+        <pose relative_to='world'>0 0 0 0 0 0</pose>
+        <link name='base_link'>
+            <pose relative_to='__model__'>0 0 0 0 0 0</pose>
+            <inertial> <!--inertial properties of the link mass, inertia matix-->
+                <mass>0.123</mass>
+                <pose>0 0 0.022 0 0 0</pose>
+                <inertia>
+                    <ixx>0.00015</ixx>
+                    <ixy>0</ixy>
+                    <ixz>0</ixz>
+                    <iyy>0.00015</iyy>
+                    <iyz>0</iyz>
+                    <izz>0.00025</izz>
+                </inertia>
+            </inertial>
+            <visual name='visual'>
+                <pose>0 0 0.025 0 0 0</pose>
+                <geometry>
+                    <cylinder>
+                        <radius>0.050</radius>
+                        <length>0.050</length>
+                    </cylinder>
+                </geometry>
+
+                <material>
+                    <ambient>0.0 0.0 1.0 1</ambient>
+                    <diffuse>0.0 0.0 1.0 1</diffuse>
+                    <specular>0.0 0.0 1.0 1</specular>
+                </material>
+            </visual>
+            <!--
+            <collision name='collision'>
+                <pose>0 0 0.025 0 0 0</pose>
+                <geometry>
+                    <cylinder>
+                        <radius>0.050</radius>
+                        <length>0.050</length>
+                    </cylinder>
+                </geometry>
+            </collision>
+            -->
+        </link>
+
+        <xacro:macro name='base_collision_macro' params='number x y radius '>
+            <link name='base_collision${number}_link'>
+                <pose relative_to='base_link'>${x} ${y} ${radius} 0 0 0</pose>
+                <inertial> 
+                    <mass>0.001</mass>
+                    <pose>0 0 0 0 0 0</pose>
+                    <inertia>
+                        <ixx>0.0000041</ixx>
+                        <ixy>0</ixy>
+                        <ixz>0</ixz>
+                        <iyy>0.00000033</iyy>
+                        <iyz>0</iyz>
+                        <izz>0.0000039</izz>
+                    </inertia>
+                </inertial>
+                <visual name='visual'>
+                    <pose>0 0 0 0 0 0</pose>
+                    <geometry>
+                        <sphere>
+                            <radius>${radius}</radius>
+                        </sphere>
+                    </geometry>
+                    
+                    <material>
+                        <ambient>1.0 0.0 1.0 1</ambient>
+                        <diffuse>1.0 0.0 1.0 1</diffuse>
+                        <specular>1.0 0.0 1.0 1</specular>
+                    </material>
+                </visual>
+                <collision name='collision'>
+                    <pose>0 0 0 0 0 0</pose>
+                    <geometry>
+                        <sphere>
+                            <radius>${radius}</radius>
+                        </sphere>
+                    </geometry>
+                    <surface>
+                        <friction>
+                            <ode>
+                                <mu>${base_friction}</mu>
+                                <mu2>${base_friction}</mu2>
+                            </ode>
+                        </friction>
+                    </surface>
+
+                </collision>
+            </link>
+
+            <joint name='base_collision${number}_joint' type='fixed'>
+                <pose relative_to='base_collision${number}_link'/>
+                <parent>base_link</parent>
+                <child>base_collision${number}_link</child>
+            </joint>
+        </xacro:macro>
+
+        <xacro:base_collision_macro number='1' x='-0.085'   y='0.010'   radius='0.004'/>
+        <xacro:base_collision_macro number='2' x='0.034'    y='0.079'   radius='0.004'/>
+        <xacro:base_collision_macro number='3' x='0.051'    y='0.069'   radius='0.004'/>
+        <xacro:base_collision_macro number='4' x='0.051'    y='-0.069'  radius='0.004'/>
+        <xacro:base_collision_macro number='5' x='0.034'    y='-0.079'  radius='0.004'/>
+        <xacro:base_collision_macro number='6' x='-0.085'   y='-0.010'  radius='0.004'/>
+
+
+
+        <xacro:macro name='servo_macro' params='number x y roll yaw '>
+
+            <link name='servo${number}_link'>
+                <pose relative_to='base_link'>${x} ${y} ${servo_height} ${roll} ${draft_angle} ${yaw}</pose>
+                <inertial> <!--inertial properties of the link mass, inertia matix-->
+                    <pose>-0.023 -0.010 0 0 0 0</pose>
+                    <mass>0.060</mass>
+                    <inertia>
+                        <ixx>0.00001</ixx>
+                        <ixy>0</ixy>
+                        <ixz>0</ixz>
+                        <iyy>0.0000065</iyy>
+                        <iyz>0</iyz>
+                        <izz>0.0000125</izz>
+                    </inertia>
+                </inertial>
+                <visual name='visual'>
+                    <pose>-0.023 -0.010 0 0 0 0</pose>
+                    <geometry>
+                        <box>
+                            <size>0.030 0.040 0.020</size>
+                        </box>
+                    </geometry>
+                    <material>
+                        <ambient>0.0 1.0 0.0 1</ambient>
+                        <diffuse>0.0 1.0 0.0 1</diffuse>
+                        <specular>0.0 1.0 0.0 1</specular>
+                    </material>
+                </visual>
+                <!--
+                <collision name='collision'>
+                    <pose>-0.023 -0.010 0 0 0 0</pose>
+                    <geometry>
+                        <box>
+                            <size>0.030 0.040 0.020</size>
+                        </box>
+                    </geometry>
+                </collision>
+                -->
+            </link>
+
+            <joint name='servo${number}_joint' type='fixed'>
+                <pose relative_to='servo${number}_link'/>
+                <parent>base_link</parent>
+                <child>servo${number}_link</child>
+            </joint>
+
+            <link name='arm${number}_link'>
+                <pose relative_to='servo${number}_link'/>
+                <inertial> 
+                    <mass>0.008</mass>
+                    <pose>0 ${arm_length / 2} 0 0 0 0</pose>
+                    <inertia>
+                        <ixx>0.0000041</ixx>
+                        <ixy>0</ixy>
+                        <ixz>0</ixz>
+                        <iyy>0.00000033</iyy>
+                        <iyz>0</iyz>
+                        <izz>0.0000039</izz>
+                    </inertia>
+                </inertial>
+                <visual name='visual'>
+                    <pose>0 ${arm_length / 2 } 0 1.5708 0 0</pose>
+                    <geometry>
+                        <cylinder>
+                            <radius>0.0050</radius>
+                            <length>${arm_length}</length>
+                        </cylinder>
+                    </geometry>
+                    
+                    <material>
+                        <ambient>1.0 0.0 1.0 1</ambient>
+                        <diffuse>1.0 0.0 1.0 1</diffuse>
+                        <specular>1.0 0.0 1.0 1</specular>
+                    </material>
+                </visual>
+                <!--
+                <collision name='collision'>
+                    <pose>0 ${arm_length / 2 } 0 1.5708 0 0</pose>
+                    <geometry>
+                        <cylinder>
+                            <radius>0.0050</radius>
+                            <length>${arm_length}</length>
+                        </cylinder>
+                    </geometry>
+                </collision>
+                -->
+            </link>
+
+            <joint name='arm${number}_joint' type='revolute'>
+                <pose relative_to='arm${number}_link'/>
+                <parent>servo${number}_link</parent>
+                <child>arm${number}_link</child>
+                <axis>
+                    <xyz expressed_in='arm${number}_link'>1 0 0</xyz> 
+                    <limit>
+                        <lower>-1.25</lower>   
+                        <upper>1.25</upper>
+                    </limit>
+                    <dynamics>
+                        <friction>0.05</friction>
+                        <damping>0.04</damping>
+                    </dynamics>
+                </axis>
+            </joint>
+
+            <link name='arm${number}_end_link'>
+                <pose relative_to='arm${number}_link'/>
+                <inertial> 
+                    <mass>0.001</mass>
+                    <pose>0 ${arm_length} 0 0 0 0</pose>
+                    <inertia>
+                        <ixx>0.0000041</ixx>
+                        <ixy>0</ixy>
+                        <ixz>0</ixz>
+                        <iyy>0.00000033</iyy>
+                        <iyz>0</iyz>
+                        <izz>0.0000039</izz>
+                    </inertia>
+                </inertial>
+                <visual name='visual'>
+                    <pose>0 ${arm_length} 0 0 0 0</pose>
+                    <geometry>
+                        <sphere>
+                            <radius>0.0060</radius>
+                        </sphere>
+                    </geometry>
+                    
+                    <material>
+                        <ambient>1.0 0.0 1.0 1</ambient>
+                        <diffuse>1.0 0.0 1.0 1</diffuse>
+                        <specular>1.0 0.0 1.0 1</specular>
+                    </material>
+                </visual>
+                <collision name='collision'>
+                    <pose>0 ${arm_length} 0 0 0 0</pose>
+                    <geometry>
+                        <sphere>
+                            <radius>0.0060</radius>
+                        </sphere>
+                    </geometry>
+                    <surface>       
+                        <friction>       
+                            <ode>
+                            <mu>${arm_friction}</mu>
+                            <mu2>${arm_friction}</mu2>
+                            </ode>       
+                        </friction>       
+                    </surface>       
+                </collision>
+            </link>
+
+            <joint name='arm${number}_end_joint' type='fixed'>
+                <pose relative_to='arm${number}_end_link'/>
+                <parent>arm${number}_link</parent>
+                <child>arm${number}_end_link</child>
+            </joint>
+
+            <plugin
+                filename="libignition-gazebo-joint-position-controller-system.so"
+                name="ignition::gazebo::systems::JointPositionController">
+                <joint_name>arm${number}_joint</joint_name> 
+                <joint_index>0</joint_index>
+                <p_gain>20</p_gain>
+                <i_gain>0.0</i_gain>
+                <d_gain>0.0</d_gain>
+            </plugin>
+
+        </xacro:macro>
+
+
+        <xacro:servo_macro number='1' x='${servo1_x}' y='${servo1_y}'  roll='0'                 yaw='${_120_degrees}'/>
+        <xacro:servo_macro number='2' x='${servo2_x}' y='${servo2_y}'  roll='${_180_degrees}'   yaw='${_120_degrees}'/>
+        <xacro:servo_macro number='3' x='${servo3_x}' y='${servo3_y}'  roll='0'                 yaw='0'/>
+        <xacro:servo_macro number='4' x='${servo4_x}' y='${servo4_y}'  roll='${_180_degrees}'   yaw='0'/>
+        <xacro:servo_macro number='5' x='${servo5_x}' y='${servo5_y}'  roll='0'                 yaw='${_240_degrees}'/>
+        <xacro:servo_macro number='6' x='${servo6_x}' y='${servo6_y}'  roll='${_180_degrees}'   yaw='${_240_degrees}'/>
+
+        
+        <plugin filename="libignition-gazebo-pose-publisher-system.so" name="ignition::gazebo::systems::PosePublisher">
+            <publish_nested_model_pose>true</publish_nested_model_pose>
+            <update_frequency>100</update_frequency>
+        </plugin>
+
+      
+        <plugin filename="libignition-gazebo-joint-state-publisher-system.so" name="ignition::gazebo::systems::JointStatePublisher">
+            <joint_name>arm1_joint</joint_name>
+            <joint_name>arm2_joint</joint_name>
+            <joint_name>arm3_joint</joint_name>
+            <joint_name>arm4_joint</joint_name>
+            <joint_name>arm5_joint</joint_name>
+            <joint_name>arm6_joint</joint_name>
+        </plugin>
+      
+
+    </model>
+
+</sdf>
