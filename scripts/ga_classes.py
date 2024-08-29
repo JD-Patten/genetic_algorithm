@@ -1,4 +1,3 @@
-# definitions from Goldberg GA book
 
 # Organism - a possible solution being tested. aka 
 # Genotype - total genetic package of an organism aka Structure
@@ -18,7 +17,6 @@ import copy
 
 
 class Parameter():
-
 
     def __init__(self,  name, limits, value = None):
         self.name = name
@@ -249,6 +247,9 @@ class Organism():
 
 class Population():
 
+    """
+    This is the population Class
+    """
     
     def __init__(self, organisms: List[Organism] = None, number = None):
         
