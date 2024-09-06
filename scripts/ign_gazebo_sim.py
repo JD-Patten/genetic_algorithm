@@ -19,28 +19,32 @@ from rosgraph_msgs.msg import Clock
 from ga_classes import *
 
 
+# Standard values for parameters if they are not being used in the genotype
 
-servo_offset_1 = 95 * 0.001                   # mm to m Distance between servos 2-3, 4-5, 6-1
-servo_offset_2 = 72 * 0.001                   # mm to m Distance between servos 1-2, 3-4, 5-6
-servo_height = 43 * 0.001                     # mm to m 
-    
-end_connection_offset_1 = 50 * 0.001          # mm to m Distance between arm connection points 2-3, 4-5, 6-1
-end_connection_offset_2 = 30 * 0.001          # mm to m Distance between arm connection points 1-2, 3-4, 5-6
-end_connection_z_offset = -12.5 * 0.001       # mm to m 
-    
-draft_angle = 20                              # degrees
-l1 = 65 * 0.001                               # mm to m 
-    
-                         #amplitude,   period,     position shift,   time shift
-x_limits =                [[0,30],     [1.0,5.0],     [-25,25],       [0,1]] 
-y_limits =                [[0,30],     [1.0,5.0],     [-25,25],       [0,1]]  
-z_limits =                [[0,30],     [1.0,5.0],     [180,210],      [0,1]] 
-roll_limits =             [[0,20],     [1.0,5.0],     [-15,15],       [0,1]]
-pitch_limits =            [[0,20],     [1.0,5.0],     [-15,15],       [0,1]]  
-yaw_limits =              [[0,20],     [1.0,5.0],     [-15,15],       [0,1]]
+IK_values_dict = {'servo_offset_1': 95 * 0.001,
+                  'servo_offset_2': 72 * 0.001,                   # mm to m Distance between servos 1-2, 3-4, 5-6 
+                  'servo_height': 43 * 0.001,                     # mm to m 
+
+                  'end_connection_offset_1': 50 * 0.001,          # mm to m Distance between arm connection points 2-3, 4-5, 6-1 (used when not using ik_genes)
+                  'end_connection_offset_2': 30 * 0.001,          # mm to m Distance between arm connection points 1-2, 3-4, 5-6 (used when not using ik genes)
+                  'end_connection_z_offset': -12.5 * 0.001,       # mm to m 
+
+                  'draft_angle': 20,                              # degrees
+                  'l1': 65 * 0.001,                               # mm to m 
+                  'l2': 194 * .001,}                              # mm to m                  
+
+# limits for parameters if they are being used in the genotype
+
+x_limits =      {'amplitude': [0, 30], 'period': [1.0, 5.0], 'position_shift': [-25, 25], 'time_shift': [0, 1]}
+y_limits =      {'amplitude': [0, 30], 'period': [1.0, 5.0], 'position_shift': [-25, 25], 'time_shift': [0, 1]}
+z_limits =      {'amplitude': [0, 30], 'period': [1.0, 5.0], 'position_shift': [180, 210], 'time_shift': [0, 1]}
+roll_limits =   {'amplitude': [0, 20], 'period': [1.0, 5.0], 'position_shift': [-15, 15], 'time_shift': [0, 1]}
+pitch_limits =  {'amplitude': [0, 20], 'period': [1.0, 5.0], 'position_shift': [-15, 15], 'time_shift': [0, 1]}
+yaw_limits =    {'amplitude': [0, 20], 'period': [1.0, 5.0], 'position_shift': [-15, 15], 'time_shift': [0, 1]}
 
 
-ik_genes_limits = [[40,100], [20,50], [150,250]]
+ik_limits = {'l1': None, 'servo_offset_1': None, 'servo_offset_2': None, 'servo_height': None,
+                    'l2': [40,100], 'end_connection_offset_2': [20,50], 'long_arm_length':[150,250]}
 
 planted_population = None
 
@@ -66,8 +70,6 @@ class SimulationManager(Node):
         self.ramp_up_time = 0.80                          #time for new organism to go from default parameters to it's own parameters
         self.resolution = 6                               #number of genes (1s or 0s) per parameter
 
-
-        self.l2 =  194 *0.001                             # arm length in mm
 
         self.publish_joint_goal_states = False            #used to publish the arm angle goals being sent to the sim
 
@@ -180,7 +182,32 @@ class SimulationManager(Node):
                                 Substructure('dof', 'z', z_limits),
                                 Substructure('dof', 'roll', roll_limits),
                                 Substructure('dof', 'pitch', pitch_limits),
-                                Substructure('dof', 'yaw', yaw_limits)]
+                                Substructure('dof', 'yaw', yaw_limits),
+                                Substructure('ik', 'ik', ik_limits)]
+                
+                # give the inverse kinematics genes their default values. 
+                # If their limits are being used they'll be randomized when the Organism is made
+                for SS in substructures:
+                    if SS.type == 'ik':
+                        for param in SS.parameters:
+                            param.value = IK_values_dict.get(param.name)
+
+                #clear out the limits that are not being used
+                for SS in substructures:
+                    for parameter in SS.parameters:
+
+                        #clear inverse kinematics limits if they are not being used in the genotype
+                        if not self.use_ik_genes and SS.type == 'ik':   
+                            parameter.limits = None
+                        
+                        #clear the period limits if a constant period is being used
+                        if self.use_constant_period:
+                            if parameter.name == 'period':
+                                parameter.limits = None
+                                parameter.value = self.constant_period
+
+                    i
+                    
 
                 validated = False
                 while not validated:
@@ -438,7 +465,7 @@ class SimulationManager(Node):
 
 
             #this is used for the bot_pose_pub that saves the info for blender animations
-            # this doesn't work probably because theres a delay between the goal pose and results from the sim
+            # this doesn't work probably because there's a delay between the goal pose and results from the sim
             self.end_effector_pose = Pose()
             self.end_effector_pose.position.x = x
             self.end_effector_pose.position.y = y

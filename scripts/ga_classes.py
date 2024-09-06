@@ -9,46 +9,62 @@
 # substructure - a group of parameters that tend to go together. 
 # resolution - number of bits (or genes) per parameter. ex: a resolution of 6 means 2^6 possibilites for that parameter
 
+
 import random
 import math
 from typing import List
 import copy
-
+from scipy.spatial.transform import Rotation as R
 
 
 class Parameter():
 
-    def __init__(self,  name, limits, value = None):
+    def __init__(self,  name, limits = None, value = None):
+
+
+        #Both limits and value can not be None. if they are there's no way to 
+        if limits is None and value is None:
+            raise ValueError("At least one of 'limits' or 'value' must be provided.")
+        
+        # if limits are not provided, it's assumed that the parameter will not be used in the genotype
+        # it will not be represented in binary and not used in any of the GA operations.
+        if limits == None:
+            self.used_for_genotype = False
+        else:
+            self.used_for_genotype = True
+
         self.name = name
         self.limits = limits 
         self.value = value
         self.genotype_range = None
+
+
     
     def __repr__(self):
         return f"Parameter('{self.name}', {self.limits}, {self.value})"
 
 class Substructure():
-    def __init__(self, type, name, list_of_limits, custom_parameter_names = None):
+    def __init__(self, type, name, limits_dict):
         self.type = type.lower()
         self.name = name
-        self.list_of_limits = list_of_limits
+        self.limits_dict = limits_dict
         self.parameters: List[Parameter] = []
 
         if type.lower() == "dof":
 
-            self.parameters.append(Parameter(limits = list_of_limits[0], name = "amplitude"))
-            self.parameters.append(Parameter(limits = list_of_limits[1], name = "period"))
-            self.parameters.append(Parameter(limits = list_of_limits[2], name = "position shift"))
-            self.parameters.append(Parameter(limits = list_of_limits[3], name = "time shift"))
+            # currently not doing anything special for dof type substructures
+            for param_name, limits in limits_dict.items():
+                self.parameters.append(Parameter(limits = limits_dict[i], name = name))
 
         else:
-            for i, name in enumerate(custom_parameter_names):
-                self.parameters.append(Parameter(limits = list_of_limits[i], name = name))
+            for param_name, limits in limits_dict.items():
+                self.parameters.append(Parameter(limits = limits_dict[i], name = name))
                 
             return
         
+        
     def __repr__(self):
-        return f"Substructure('{self.type}', '{self.name}', {self.list_of_limits})"
+        return f"Substructure('{self.type}', '{self.name}', {self.limits_dict})"
     
     def solve_sin_function(self, time):
 
@@ -96,6 +112,8 @@ class Organism():
             self.genotype = genotype
 
         self.update_phenotype()
+
+        self.set_transforms()
     
     def __repr__(self):
         return f"Organism({self.substructures}, {self.resolution}, {self.genotype})"
@@ -174,7 +192,7 @@ class Organism():
         for substructure in self.substructures:
             for parameter in substructure.parameters:
                 if parameter.name == "period":
-                    
+                   
                     target_value = parameter.value * multiplier
 
                     # make sure target value is in range
@@ -243,7 +261,38 @@ class Organism():
 
         self.update_phenotype()
 
+    def set_transforms(self):
 
+        # Initialize an empty dictionary to store parameters
+        ik_parameters_dict = {}
+
+        # Iterate through Substructure to collect parameters
+        for ss in Substructure:
+            if ss.name == 'ik':
+                for parameter in ss.parameters:
+                    # Add parameter name and value to the dictionary
+                    ik_parameters_dict[parameter.name] = parameter.value
+
+
+        # set the translations for the servos and end effector connection points for inverse kinematics
+        self.servo_translations = self.find_servo_or_connection_point_coords(ik_parameters_dict['servo_offset_1'],
+                                                                             ik_parameters_dict['servo_offset_2'],
+                                                                             ik_parameters_dict['servo_height'])
+        
+        
+        self.end_effector_arm_connections = self.find_servo_or_connection_point_coords(ik_parameters_dict['end_connection_offset_1'],
+                                                                                       ik_parameters_dict['end_connection_offset_2'],
+                                                                                       ik_parameters_dict['end_connection_z_offset'])
+
+
+        #the rotations are set up 'backwards' with yzx and negative signs because we are going from the servo to the base frame
+        draft_angle = ik_parameters_dict['draft_angle']
+        self.servo_rotations = [R.from_euler('zyx', [-120,  draft_angle,    0], degrees=True),
+                                R.from_euler('zyx', [-120,  draft_angle, -180], degrees=True),
+                                R.from_euler('zyx', [   0,  draft_angle,    0], degrees=True),
+                                R.from_euler('zyx', [   0,  draft_angle, -180], degrees=True),
+                                R.from_euler('zyx', [ 120,  draft_angle,    0], degrees=True),
+                                R.from_euler('zyx', [ 120,  draft_angle, -180], degrees=True)]
 
 class Population():
 
