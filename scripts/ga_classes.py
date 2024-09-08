@@ -38,7 +38,6 @@ class Parameter():
         self.value = value
         self.genotype_range = None
 
-
     
     def __repr__(self):
         return f"Parameter('{self.name}', {self.limits}, {self.value})"
@@ -54,13 +53,12 @@ class Substructure():
 
             # currently not doing anything special for dof type substructures
             for param_name, limits in limits_dict.items():
-                self.parameters.append(Parameter(limits = limits_dict[i], name = name))
+                self.parameters.append(Parameter(limits = limits, name = param_name))
 
         else:
             for param_name, limits in limits_dict.items():
-                self.parameters.append(Parameter(limits = limits_dict[i], name = name))
+                self.parameters.append(Parameter(limits = limits, name = param_name))
                 
-            return
         
         
     def __repr__(self):
@@ -273,6 +271,9 @@ class Organism():
                     # Add parameter name and value to the dictionary
                     ik_parameters_dict[parameter.name] = parameter.value
 
+        # set the arm lengths
+        self.l1 = ik_parameters_dict['l1']
+        self.l2 = ik_parameters_dict['l2']
 
         # set the translations for the servos and end effector connection points for inverse kinematics
         self.servo_translations = self.find_servo_or_connection_point_coords(ik_parameters_dict['servo_offset_1'],

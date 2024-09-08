@@ -55,9 +55,9 @@ class SimulationManager(Node):
         # GA features
         self.use_planted_population = False
         self.use_fitness_scaling = False
-        self.use_ik_genes = False                         # this toggles using additional genes to control the dimensions of the end effector and long arms
-        self.use_varied_speed = False
-        self.use_constant_period = False
+        self.use_ik_genes = True                         # this toggles using additional genes to control the dimensions of the end effector and long arms
+        self.use_varied_speed = True
+        self.use_constant_period = True
         self.constant_period = 1.0
         self.check_for_hit_ground = False
         
@@ -99,7 +99,6 @@ class SimulationManager(Node):
         self.sim_time = 0.0
         self.sim_time_offset = 0.0
 
-        self.initialize_transforms()
         self.organism_starting_position = [0.0, 0.0, 0.0]
         self.create_initial_population()
 
@@ -150,20 +149,6 @@ class SimulationManager(Node):
 
         print(msg)
         self.population_info_pub.publish(msg)
-
-    def initialize_transforms(self):
-    
-        # set the translations for the servos and end effector connection points for inverse kinematics
-        self.servo_translations = self.find_servo_or_connection_point_coords(servo_offset_1, servo_offset_2, servo_height)
-        self.end_effector_arm_connections = self.find_servo_or_connection_point_coords(end_connection_offset_1, end_connection_offset_2, end_connection_z_offset)
-
-        #the rotations are set up 'backwards' with yzx and negative signs because we are going from the servo to the base frame
-        self.servo_rotations = [R.from_euler('zyx', [-120,  draft_angle,    0], degrees=True),
-                                R.from_euler('zyx', [-120,  draft_angle, -180], degrees=True),
-                                R.from_euler('zyx', [   0,  draft_angle,    0], degrees=True),
-                                R.from_euler('zyx', [   0,  draft_angle, -180], degrees=True),
-                                R.from_euler('zyx', [ 120,  draft_angle,    0], degrees=True),
-                                R.from_euler('zyx', [ 120,  draft_angle, -180], degrees=True)]
     
     def create_initial_population(self):
         
@@ -206,7 +191,7 @@ class SimulationManager(Node):
                                 parameter.limits = None
                                 parameter.value = self.constant_period
 
-                    i
+    
                     
 
                 validated = False
@@ -245,21 +230,22 @@ class SimulationManager(Node):
 
 
         hit_ground = False
-        ground_angle = math.radians(38)
 
-        max_allowable_angular_velocity = 1.0 #radians/second
+        
+        ground_angle = math.radians(38)             #angle where the robots arm hits the ground
+
+        # set max angles and velocitys for validating 
+        max_allowable_angular_velocity = 1.0        #radians/second
         max_allowable_angle = math.radians(55)  
-        dt = .01
+
+        #initialize variables to track angles reached
         max_angle = 0
         max_angular_velocity = 0
-
         all_angles = []
         all_velocities = []
 
-        end_effector_connections = self.end_effector_arm_connections
-        l2 = self.l2
-
-        total_time = self.max_lifetime
+        dt = .01                                    #step size to check the arm angles (seconds)
+        total_time = self.max_lifetime              # number or seconds that will be checked (starting at t = 0)
 
         if self.use_constant_period:
             organism.set_constant_period(self.constant_period)
@@ -282,8 +268,7 @@ class SimulationManager(Node):
             try:
                 angles = self.solve_inverse_kinematics(translation=[x,y,z],
                                                       quaternion=q,
-                                                      l2=l2,
-                                                      end_effector_connections=end_effector_connections)
+                                                      organism=organism)
             except:
                 self.get_logger().info(f'Failed to solve IK: {organism}')  
                 return False
@@ -532,32 +517,20 @@ class SimulationManager(Node):
 
         self.get_logger().info(f'Distances traveled: {[f"{organism.fitness:.4f}"for organism in self.population.organisms]}') 
 
-        if self.current_organism_number == (len(self.population.organisms) - 1):       #check if last organism in population
+        # steps if it was the last organism in the population
+        if self.current_organism_number == (len(self.population.organisms) - 1):       
             self.new_generation()
             self.current_organism_number = 0
             self.current_generation_number += 1
-
-            if self.use_ik_genes:
-                self.end_effector_arm_connections = self.find_servo_or_connection_point_coords(self.population[self.current_organism_number][6][0] * 0.001,
-                                                                                               self.population[self.current_organism_number][6][1] * 0.001,
-                                                                                               end_connection_z_offset)
-                self.l2 = self.population[self.current_organism_number][6][2] * 0.001
 
             self.get_logger().info(f'Org #{self.current_organism_number} phenotype:\n{self.population.organisms[self.current_organism_number].get_phenotype_dict()}\n')
             self.publish_pop_info()
 
             self.running = True
             
-
+        #Steps if there are more organisms in the population
         else:
             self.current_organism_number += 1
-
-            if self.use_ik_genes:
-                self.end_effector_arm_connections = self.find_servo_or_connection_point_coords(self.population[self.current_organism_number][6][0] * 0.001,
-                                                                                               self.population[self.current_organism_number][6][1] * 0.001,
-                                                                                               end_connection_z_offset)
-                self.l2 = self.population[self.current_organism_number][6][2] * 0.001
-
             self.get_logger().info(f'Org #{self.current_organism_number} phenotype:\n{self.population.organisms[self.current_organism_number].get_phenotype_dict()}\n')
             self.publish_pop_info()
             self.running = True
@@ -644,18 +617,16 @@ class SimulationManager(Node):
         self.get_logger().warn(f"Unable to produce valid offspring from given parents, returning the parents instead.")
         return [parent1, parent2]
 
-    def solve_inverse_kinematics(self, translation, quaternion, l2 = None, end_effector_connections = None):   
-
-        if l2 == None:
-            l2 = self.l2
-
-        if end_effector_connections == None:
-            end_effector_connections = self.end_effector_arm_connections
+    def solve_inverse_kinematics(self, translation, quaternion, organism: Organism): 
+        
+        l1 = organism.l1
+        l2 = organism.l2
+        end_effector_connections = organism.end_effector_arm_connections
 
         angles = []
 
+        # solve the inverse kinematics for each arm one at a time
         for arm_number in range(6):
-
             #rotate the end connection point
 
             rotation_matrix = R.from_quat(quaternion)
