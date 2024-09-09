@@ -401,77 +401,79 @@ class SimulationManager(Node):
             self.bot_pose_pub.publish(bot_pose_msg)
 
     def set_end_effector_pose(self):                     #finds the pose for the end effector given the sim time and the current organisms parameters
-        if self.running:
-            time = self.sim_time #- self.sim_time_offset 
-            current_org = self.population.organisms[self.current_organism_number]
-            values_dict = current_org.solve_sin_functions(time)
+        if not self.running:
+            return
+        
+        time = self.sim_time #- self.sim_time_offset 
+        current_org = self.population.organisms[self.current_organism_number]
+        values_dict = current_org.solve_sin_functions(time)
 
 
-            q = quaternion_from_euler(math.radians(values_dict.get('roll')),
-                                      math.radians(values_dict.get('pitch')),
-                                      math.radians(values_dict.get('yaw')))
+        q = quaternion_from_euler(math.radians(values_dict.get('roll')),
+                                    math.radians(values_dict.get('pitch')),
+                                    math.radians(values_dict.get('yaw')))
+        
+
+        x = values_dict.get('x') * 0.001               #converts to meters
+        y = values_dict.get('y') * 0.001
+        z = values_dict.get('z') * 0.001           
+
+
+        #this is used for the bot_pose_pub that saves the info for blender animations
+        # this doesn't work probably because there's a delay between the goal pose and results from the sim
+        self.end_effector_pose = Pose()
+        self.end_effector_pose.position.x = x
+        self.end_effector_pose.position.y = y
+        self.end_effector_pose.position.z = z
+        self.end_effector_pose.orientation.x = q[0]
+        self.end_effector_pose.orientation.y = q[1]
+        self.end_effector_pose.orientation.z = q[2]
+        self.end_effector_pose.orientation.w = q[3]
+
+
+        try:
+            angles = self.solve_inverse_kinematics(translation=[x,y,z], quaternion= q, organism=current_org)
+        except:
+            self.get_logger().warning(f'Failed to solve IK on:  {self.population.organisms[self.current_organism_number]} \n for sim time:  {time}')  
+        
+        angles = self.ramp_up_angles(angles)
+
+        try:
+            msg1 = Float64()
+            msg1.data = angles[0]
             
+            msg2 = Float64()
+            msg2.data = angles[1]
 
-            x = values_dict.get('x') * 0.001               #converts to meters
-            y = values_dict.get('y') * 0.001
-            z = values_dict.get('z') * 0.001           
+            msg3 = Float64()
+            msg3.data = angles[2]
 
+            msg4 = Float64()
+            msg4.data = angles[3]
 
-            #this is used for the bot_pose_pub that saves the info for blender animations
-            # this doesn't work probably because there's a delay between the goal pose and results from the sim
-            self.end_effector_pose = Pose()
-            self.end_effector_pose.position.x = x
-            self.end_effector_pose.position.y = y
-            self.end_effector_pose.position.z = z
-            self.end_effector_pose.orientation.x = q[0]
-            self.end_effector_pose.orientation.y = q[1]
-            self.end_effector_pose.orientation.z = q[2]
-            self.end_effector_pose.orientation.w = q[3]
+            msg5 = Float64()
+            msg5.data = angles[4]
 
+            msg6 = Float64()
+            msg6.data = angles[5]
 
+            self.pub1.publish(msg1)
+            self.pub2.publish(msg2)
+            self.pub3.publish(msg3)
+            self.pub4.publish(msg4)
+            self.pub5.publish(msg5)
+            self.pub6.publish(msg6)
+
+        except:
+            self.get_logger().info(f'Failed to publish angle messages')  
+
+        if self.publish_joint_goal_states:
             try:
-                angles = self.solve_inverse_kinematics(translation=[x,y,z], quaternion= q, organism=current_org)
-            except:
-                self.get_logger().info(f'Failed to solve IK on:  {self.population.organisms[self.current_organism_number]} \n for sim time:  {time}')  
-            
-            angles = self.ramp_up_angles(angles)
-
-            try:
-                msg1 = Float64()
-                msg1.data = angles[0]
-                
-                msg2 = Float64()
-                msg2.data = angles[1]
-
-                msg3 = Float64()
-                msg3.data = angles[2]
-
-                msg4 = Float64()
-                msg4.data = angles[3]
-
-                msg5 = Float64()
-                msg5.data = angles[4]
-
-                msg6 = Float64()
-                msg6.data = angles[5]
-
-                self.pub1.publish(msg1)
-                self.pub2.publish(msg2)
-                self.pub3.publish(msg3)
-                self.pub4.publish(msg4)
-                self.pub5.publish(msg5)
-                self.pub6.publish(msg6)
-
-            except:
-                self.get_logger().info(f'Failed to publish angle messages')  
-
-            if self.publish_joint_goal_states:
-              try:
-                  msg = JointState()
-                  msg.position = angles
-                  self.joint_goal_pub.publish(msg)
-              except: 
-                  self.get_logger().info(f'Failed to publish angle goals JS messages')
+                msg = JointState()
+                msg.position = angles
+                self.joint_goal_pub.publish(msg)
+            except: 
+                self.get_logger().info(f'Failed to publish angle goals JS messages')
     
     def end_of_life(self): 
         self.running = False
