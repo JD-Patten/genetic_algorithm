@@ -20,21 +20,20 @@ from ga_classes import *
 
 
 # Standard values for parameters if they are not being used in the genotype
+ik_values_dict = {'l1': 65 * 0.001,                               # mm to m  (servo arm)
+                  'l2': 194 * .001,                               # mm to m  (long arm)
 
-IK_values_dict = {'servo_offset_1': 95 * 0.001,
+                  'servo_offset_1': 95 * 0.001,
                   'servo_offset_2': 72 * 0.001,                   # mm to m Distance between servos 1-2, 3-4, 5-6 
                   'servo_height': 43 * 0.001,                     # mm to m 
+                  'draft_angle': 20,                              # degrees
 
                   'end_connection_offset_1': 50 * 0.001,          # mm to m Distance between arm connection points 2-3, 4-5, 6-1 (used when not using ik_genes)
                   'end_connection_offset_2': 30 * 0.001,          # mm to m Distance between arm connection points 1-2, 3-4, 5-6 (used when not using ik genes)
-                  'end_connection_z_offset': -12.5 * 0.001,       # mm to m 
-
-                  'draft_angle': 20,                              # degrees
-                  'l1': 65 * 0.001,                               # mm to m 
-                  'l2': 194 * .001,}                              # mm to m                  
+                  'end_connection_z_offset': -12.5 * 0.001}       # mm to m 
+                                 
 
 # limits for parameters if they are being used in the genotype
-
 x_limits =      {'amplitude': [0, 30], 'period': [1.0, 5.0], 'position_shift': [-25, 25], 'time_shift': [0, 1]}
 y_limits =      {'amplitude': [0, 30], 'period': [1.0, 5.0], 'position_shift': [-25, 25], 'time_shift': [0, 1]}
 z_limits =      {'amplitude': [0, 30], 'period': [1.0, 5.0], 'position_shift': [180, 210], 'time_shift': [0, 1]}
@@ -42,9 +41,16 @@ roll_limits =   {'amplitude': [0, 20], 'period': [1.0, 5.0], 'position_shift': [
 pitch_limits =  {'amplitude': [0, 20], 'period': [1.0, 5.0], 'position_shift': [-15, 15], 'time_shift': [0, 1]}
 yaw_limits =    {'amplitude': [0, 20], 'period': [1.0, 5.0], 'position_shift': [-15, 15], 'time_shift': [0, 1]}
 
+ik_limits =     {'l1': None, 
+                 'l2': [.190,.200],
+                 'servo_offset_1': None, 
+                 'servo_offset_2': None, 
+                 'servo_height': None,
+                 'draft_angle': None,
+                 'end_connection_offset_1': [.040,.060], 
+                 'end_connection_offset_2': [.020,.040], 
+                 'end_connection_z_offset': None}
 
-ik_limits = {'l1': None, 'servo_offset_1': None, 'servo_offset_2': None, 'servo_height': None,
-                    'l2': [40,100], 'end_connection_offset_2': [20,50], 'long_arm_length':[150,250]}
 
 planted_population = None
 
@@ -108,47 +114,7 @@ class SimulationManager(Node):
         self.angles_from_sim = msg.position
 
     def publish_pop_info(self, population = None):
-
-        if population == None:
-            population = self.population
-
-
-        msg = PopulationStatsMsg()
-        msg.current_organism = self.current_organism_number
-        msg.generation_number = self.current_generation_number
-        msg.population_size = len(population.organisms)
-        msg.population_fitness = population.total_fitness()
-
-        msg.population_diversity = population.diversity()
-
-        for organism in population.organisms:
-            organism_msg = OrganismMsg()  
-            organism_msg.max_distance = organism.fitness
-
-            phenotype_dict = organism.get_phenotype_dict()
-            print(phenotype_dict)
-                
-            dof_msg_dict = {'x': organism_msg.x, 'y': organism_msg.y, 'z': organism_msg.z,
-                            'roll': organism_msg.roll, 'pitch': organism_msg.pitch, 'yaw': organism_msg.yaw}
-            
-            for dof, param_dict in phenotype_dict.items():
-                
-                param_msg = OrganismParameterMsg()
-
-                param_msg.amplitude       = float(param_dict.get("amplitude"))
-                param_msg.period          = float(param_dict.get("period"))
-                param_msg.position_offset = float(param_dict.get("position shift"))
-                param_msg.time_offset     = float(param_dict.get("time shift"))
-
-
-                org_msg_dof = dof_msg_dict.get(dof)
-                org_msg_dof.append(param_msg)
-
-
-            msg.organisms.append(organism_msg)
-
-        print(msg)
-        self.population_info_pub.publish(msg)
+        return
     
     def create_initial_population(self):
         
@@ -157,8 +123,9 @@ class SimulationManager(Node):
             self.population.number = 0
         
         else:
-
+            
             organisms = []
+            self.get_logger().info(f'Building Initial Population')
             for i in range(self.population_size):
 
                 # a new list of substructures is made for each new organism
@@ -175,7 +142,7 @@ class SimulationManager(Node):
                 for SS in substructures:
                     if SS.type == 'ik':
                         for param in SS.parameters:
-                            param.value = IK_values_dict.get(param.name)
+                            param.value = ik_values_dict.get(param.name)
 
                 #clear out the limits that are not being used
                 for SS in substructures:
@@ -200,6 +167,7 @@ class SimulationManager(Node):
                     validated = self.check_parameters(org)
 
                 organisms.append(org)
+                self.get_logger().info(f'{len(organisms)}/{self.population_size} orgs valdated')
 
             self.population = Population(organisms, 0)
 
@@ -269,10 +237,10 @@ class SimulationManager(Node):
                 angles = self.solve_inverse_kinematics(translation=[x,y,z],
                                                       quaternion=q,
                                                       organism=organism)
-            except:
-                self.get_logger().info(f'Failed to solve IK: {organism}')  
+            except Exception as e:
+                self.get_logger().info(f'Failed to solve IK: {organism} \n Error: {e}')  
                 return False
-            
+
             #see if there is a new max angle
             for angle in angles:
                 if abs(angle) > max_angle:
@@ -462,7 +430,7 @@ class SimulationManager(Node):
 
 
             try:
-                angles = self.solve_inverse_kinematics(translation=[x,y,z], quaternion= q)
+                angles = self.solve_inverse_kinematics(translation=[x,y,z], quaternion= q, organism=current_org)
             except:
                 self.get_logger().info(f'Failed to solve IK on:  {self.population.organisms[self.current_organism_number]} \n for sim time:  {time}')  
             
@@ -622,6 +590,8 @@ class SimulationManager(Node):
         l1 = organism.l1
         l2 = organism.l2
         end_effector_connections = organism.end_effector_arm_connections
+        servo_translations = organism.servo_translations
+        servo_rotations = organism.servo_rotations
 
         angles = []
 
@@ -638,8 +608,8 @@ class SimulationManager(Node):
 
             #rotate and translate the point so it is in the servo's frame
 
-            end_connection_point -= self.servo_translations[arm_number]
-            end_connection_point = self.servo_rotations[arm_number].apply(end_connection_point)
+            end_connection_point -= servo_translations[arm_number]
+            end_connection_point = servo_rotations[arm_number].apply(end_connection_point)
 
             x = end_connection_point[0]
             y = end_connection_point[1]
@@ -658,28 +628,6 @@ class SimulationManager(Node):
 
         return angles
             
-    def find_servo_or_connection_point_coords(self, offset_1, offset_2, z_height):
-
-        d1 = 1/6 * (offset_1 - offset_2)
-        d2 = 1/3 * (offset_1 - offset_2)
-        c = offset_1 - (2*d1)
-        radius = math.sqrt(c**2 + (d2)**2 - 2*c*d2 * math.cos(math.radians(60)))
-
-        rotate_120 = R.from_euler('z', 120, degrees=True)
-        rotate_240 = R.from_euler('z', 240, degrees=True)
-
-        number1_translations = [-1 * math.sqrt((radius ** 2) - ((offset_1/2) **2)), offset_1/2, z_height]
-        number6_translations = [number1_translations[0], -1 * number1_translations[1], z_height]
-        number2_translations = rotate_240.apply(number6_translations)
-        number3_translations = rotate_240.apply(number1_translations)
-        number4_translations = rotate_120.apply(number6_translations)
-        number5_translations = rotate_120.apply(number1_translations)
-
-
-        translations = [number1_translations, number2_translations, number3_translations,
-                        number4_translations, number5_translations, number6_translations]
-        
-        return translations   
 
 def quaternion_from_euler(ai, aj, ak):
     ai /= 2.0

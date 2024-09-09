@@ -13,7 +13,7 @@
 import random
 import math
 from typing import List
-import copy
+import warnings
 from scipy.spatial.transform import Rotation as R
 
 
@@ -21,26 +21,27 @@ class Parameter():
 
     def __init__(self,  name, limits = None, value = None):
 
-
-        #Both limits and value can not be None. if they are there's no way to 
-        if limits is None and value is None:
-            raise ValueError("At least one of 'limits' or 'value' must be provided.")
-        
-        # if limits are not provided, it's assumed that the parameter will not be used in the genotype
-        # it will not be represented in binary and not used in any of the GA operations.
-        if limits == None:
-            self.used_for_genotype = False
-        else:
-            self.used_for_genotype = True
-
         self.name = name
         self.limits = limits 
         self.value = value
         self.genotype_range = None
 
-    
     def __repr__(self):
         return f"Parameter('{self.name}', {self.limits}, {self.value})"
+    
+    def validate(self):
+
+        #limits and value can't both be None. 
+        #If they are there's no way to define its genes or use it in any way
+        if self.limits is None and self.value is None:
+            raise ValueError(f"no limits or value given for parameter: {self.name}")
+        
+        # if limits are not provided, it's assumed that the parameter will not be used in the genotype
+        # it will not be represented in binary and not used in any of the GA operations.
+        if self.limits == None:
+            self.used_for_genotype = False
+        else:
+            self.used_for_genotype = True
 
 class Substructure():
     def __init__(self, type, name, limits_dict):
@@ -75,8 +76,8 @@ class Substructure():
         # Extract parameters with default values if not provided
         amplitude = param_dict.get('amplitude')
         period = param_dict.get('period')
-        time_shift = param_dict.get('time shift')
-        position_shift = param_dict.get('position shift')
+        time_shift = param_dict.get('time_shift')
+        position_shift = param_dict.get('position_shift')
 
 
         # Calculate the value
@@ -95,13 +96,18 @@ class Organism():
 
         self.number = number
 
-        # find the range in the genotype where each parameter can be found
-        # Using muyltiparameter, mapped, fixed-point coding as described in Goldber p.82
+        # check to make sure each parameter is valid and give each parameter a range  where its genes 
+        # will be found in the genotype
+
         count = 0
         for substructure in self.substructures:
             for parameter in substructure.parameters:
-                parameter.genotype_range = (count, count + resolution)
-                count += resolution
+                parameter.validate()                                        
+                if parameter.used_for_genotype:
+                    parameter.genotype_range = (count, count + resolution)
+                    count += resolution
+                else: 
+                    parameter.genotype_range = None
 
         # if no specific genotype is given, create randomized genotype from the substructures
         if genotype == None:
@@ -120,21 +126,22 @@ class Organism():
         """
         updates the parameter values based on the current genotype
         """
-
+    
         resolution = self.resolution
 
         for substructure in self.substructures:
             for parameter in substructure.parameters:
+                if parameter.used_for_genotype:
+    
+                    #find the right binary string
+                    range = parameter.genotype_range
+                    genotype_section = self.genotype[range[0]:range[1]]
 
-                #find the right binary string
-                range = parameter.genotype_range
-                genotype_section = self.genotype[range[0]:range[1]]
-
-                #convert the binary to base 10 and map it to the parameters' range
-                binary_value = "".join(map(str, genotype_section))
-                base_10_value = int(binary_value, base=2)
-                mapped_value =  base_10_value / (2 ** resolution - 1) * (parameter.limits[1] - parameter.limits[0]) + parameter.limits[0]
-                parameter.value = mapped_value
+                    #convert the binary to base 10 and map it to the parameters' range
+                    binary_value = "".join(map(str, genotype_section))
+                    base_10_value = int(binary_value, base=2)
+                    mapped_value =  base_10_value / (2 ** resolution - 1) * (parameter.limits[1] - parameter.limits[0]) + parameter.limits[0]
+                    parameter.value = mapped_value
 
     def mutate(self, mutation_frequency = None):
         # set default mutation frequency
@@ -186,34 +193,42 @@ class Organism():
         return solutions_dict
 
     def vary_speed(self, multiplier):
-
+        # iterate through all the parameters varying them if they are a period parameter
         for substructure in self.substructures:
             for parameter in substructure.parameters:
                 if parameter.name == "period":
                    
                     target_value = parameter.value * multiplier
 
-                    # make sure target value is in range
-                    if target_value < parameter.limits[0]:
-                        target_value = parameter.limits[0]
-                    elif target_value > parameter.limits[1]:
-                        target_value = parameter.limits[1]
+                    if parameter.used_for_genotype: 
+                        
+                        # make sure target value is in range
+                        if target_value < parameter.limits[0]:
+                            target_value = parameter.limits[0]
+                        elif target_value > parameter.limits[1]:
+                            target_value = parameter.limits[1]
 
-                    # map the adjusted value to the binary range (rounding up to the nearest int)
-                    max_binary_mapped = 2 ** self.resolution - 1
-                    percent = (target_value - parameter.limits[0]) / (parameter.limits[1] - parameter.limits[0])
-                    mapped_value = math.ceil(percent * max_binary_mapped)
-                    
-                    #convert to binary
-                    binary_value = bin(mapped_value)[2:]
+                        # map the adjusted value to the binary range (rounding up to the nearest int)
+                        max_binary_mapped = 2 ** self.resolution - 1
+                        percent = (target_value - parameter.limits[0]) / (parameter.limits[1] - parameter.limits[0])
+                        mapped_value = math.ceil(percent * max_binary_mapped)
+                        
+                        #convert to binary
+                        binary_value = bin(mapped_value)[2:]
 
-                    #add zeros to the front of the binary value if it's too short
-                    for i in range(self.resolution - len(binary_value)):
-                        binary_value = '0'+binary_value
+                        #add zeros to the front of the binary value if it's too short
+                        for i in range(self.resolution - len(binary_value)):
+                            binary_value = '0'+binary_value
 
-                    for i in range(parameter.genotype_range[0], parameter.genotype_range[1]):
-                        gene = int(binary_value[i - parameter.genotype_range[0]])
-                        self.genotype[i] = gene
+                        for i in range(parameter.genotype_range[0], parameter.genotype_range[1]):
+                            gene = int(binary_value[i - parameter.genotype_range[0]])
+                            self.genotype[i] = gene
+
+                    # if the parameter is not being used in the genotype (probably because constant periods are being used)
+                    # we just update the prameter value to the target value
+                    else:
+                        parameter.value *= multiplier
+
 
         self.update_phenotype()
     
@@ -233,31 +248,11 @@ class Organism():
             for parameter in substructure.parameters:
                 if parameter.name == "period":
                     
-                    target_value = period
+                    parameter.value = period
 
-                    # make sure target value is in range
-                    if target_value < parameter.limits[0]:
-                        target_value = parameter.limits[0]
-                    elif target_value > parameter.limits[1]:
-                        target_value = parameter.limits[1]
+                    if parameter.limits != None:
+                        warnings.warn(f'setting a constant period on parameter ({parameter.name}) with limits ({parameter.limits})')
 
-                    # map the adjusted value to the binary range (rounding up to the nearest int)
-                    max_binary_mapped = 2 ** self.resolution - 1
-                    percent = (target_value - parameter.limits[0]) / (parameter.limits[1] - parameter.limits[0])
-                    mapped_value = math.ceil(percent * max_binary_mapped)
-                    
-                    #convert to binary
-                    binary_value = bin(mapped_value)[2:]
-
-                    #add zeros to the front of the binary value if it's too short
-                    for i in range(self.resolution - len(binary_value)):
-                        binary_value = '0'+binary_value
-
-                    for i in range(parameter.genotype_range[0], parameter.genotype_range[1]):
-                        gene = int(binary_value[i - parameter.genotype_range[0]])
-                        self.genotype[i] = gene
-
-        self.update_phenotype()
 
     def set_transforms(self):
 
@@ -265,7 +260,7 @@ class Organism():
         ik_parameters_dict = {}
 
         # Iterate through Substructure to collect parameters
-        for ss in Substructure:
+        for ss in self.substructures:
             if ss.name == 'ik':
                 for parameter in ss.parameters:
                     # Add parameter name and value to the dictionary
@@ -276,14 +271,14 @@ class Organism():
         self.l2 = ik_parameters_dict['l2']
 
         # set the translations for the servos and end effector connection points for inverse kinematics
-        self.servo_translations = self.find_servo_or_connection_point_coords(ik_parameters_dict['servo_offset_1'],
-                                                                             ik_parameters_dict['servo_offset_2'],
-                                                                             ik_parameters_dict['servo_height'])
+        self.servo_translations = find_servo_or_connection_point_coords(ik_parameters_dict['servo_offset_1'],
+                                                                          ik_parameters_dict['servo_offset_2'],
+                                                                          ik_parameters_dict['servo_height'])
         
         
-        self.end_effector_arm_connections = self.find_servo_or_connection_point_coords(ik_parameters_dict['end_connection_offset_1'],
-                                                                                       ik_parameters_dict['end_connection_offset_2'],
-                                                                                       ik_parameters_dict['end_connection_z_offset'])
+        self.end_effector_arm_connections = find_servo_or_connection_point_coords(ik_parameters_dict['end_connection_offset_1'],
+                                                                                  ik_parameters_dict['end_connection_offset_2'],
+                                                                                  ik_parameters_dict['end_connection_z_offset'])
 
 
         #the rotations are set up 'backwards' with yzx and negative signs because we are going from the servo to the base frame
@@ -297,10 +292,6 @@ class Organism():
 
 class Population():
 
-    """
-    This is the population Class
-    """
-    
     def __init__(self, organisms: List[Organism] = None, number = None):
         
         if organisms == None:
@@ -334,7 +325,6 @@ class Population():
 
         # Total expected diversity score for randomized population
         expected_random_distance = num_pairs * expected_hamming_distance
-        
 
         distance = 0
         
@@ -353,9 +343,6 @@ class Population():
 
         return diversity
 
-
-
-
     def total_fitness(self):
         """
         returns the sum of the individual organisms fitnesses
@@ -367,14 +354,12 @@ class Population():
         
         return total_fitness
 
-
     def mutate(population, mutation_frequency = None):
         
         for organism in population.organisms:
             organism.mutate(mutation_frequency)
     
         return 
-
 
 def crossover(org1: Organism, org2: Organism, cut_point = None):
 
@@ -467,6 +452,28 @@ def selection(population: Population, use_fitness_scaling: bool)->List[Organism]
     
     return selections
 
+def find_servo_or_connection_point_coords(offset_1, offset_2, z_height):
+
+    d1 = 1/6 * (offset_1 - offset_2)
+    d2 = 1/3 * (offset_1 - offset_2)
+    c = offset_1 - (2*d1)
+    radius = math.sqrt(c**2 + (d2)**2 - 2*c*d2 * math.cos(math.radians(60)))
+
+    rotate_120 = R.from_euler('z', 120, degrees=True)
+    rotate_240 = R.from_euler('z', 240, degrees=True)
+
+    number1_translations = [-1 * math.sqrt((radius ** 2) - ((offset_1/2) **2)), offset_1/2, z_height]
+    number6_translations = [number1_translations[0], -1 * number1_translations[1], z_height]
+    number2_translations = rotate_240.apply(number6_translations)
+    number3_translations = rotate_240.apply(number1_translations)
+    number4_translations = rotate_120.apply(number6_translations)
+    number5_translations = rotate_120.apply(number1_translations)
+
+
+    translations = [number1_translations, number2_translations, number3_translations,
+                    number4_translations, number5_translations, number6_translations]
+    
+    return translations   
 
 if __name__ == '__main__':
 
