@@ -123,7 +123,6 @@ class SimulationManager(Node):
             self.population.number = 0
         
         else:
-            
             organisms = []
             self.get_logger().info(f'Building Initial Population')
             for i in range(self.population_size):
@@ -206,7 +205,7 @@ class SimulationManager(Node):
         max_allowable_angular_velocity = 1.0        #radians/second
         max_allowable_angle = math.radians(55)  
 
-        #initialize variables to track angles reached
+        #initialize variables to track angles reachedI
         max_angle = 0
         max_angular_velocity = 0
         all_angles = []
@@ -238,7 +237,7 @@ class SimulationManager(Node):
                                                       quaternion=q,
                                                       organism=organism)
             except Exception as e:
-                self.get_logger().info(f'Failed to solve IK: {organism} \n Error: {e}')  
+                self.get_logger().debug(f'Failed to solve IK: {organism} \n Error: {e}')  
                 return False
 
             #see if there is a new max angle
@@ -277,7 +276,7 @@ class SimulationManager(Node):
         if self.check_for_hit_ground:
             if not hit_ground:
 
-                self.get_logger().info(f'Parameters not validated due to hitting ground: {organism}')  
+                self.get_logger().debug(f'Parameters not validated due to hitting ground: {organism}')  
 
                 return False
         
@@ -285,7 +284,7 @@ class SimulationManager(Node):
         
         if max_angle > max_allowable_angle:
 
-            self.get_logger().info(f'Parameters not validated due to large angle: {organism}')  
+            self.get_logger().debug(f'Parameters not validated due to large angle: {organism}')  
 
             return False
         
@@ -298,7 +297,7 @@ class SimulationManager(Node):
         # check for too large velocity on any arm (only if we haven't adjusted the speed above)
         elif max_angular_velocity > max_allowable_angular_velocity:
                 
-            self.get_logger().info(f'Parameters not validated due to too high angular velocity \n Parameters: {organism} \n Angular velocity: {max_angular_velocity}')  
+            self.get_logger().debug(f'Parameters not validated due to too high angular velocity \n Parameters: {organism} \n Angular velocity: {max_angular_velocity}')  
             return False
         
         # if not using varied speed and max velocity is less than allowable max
@@ -435,6 +434,8 @@ class SimulationManager(Node):
             angles = self.solve_inverse_kinematics(translation=[x,y,z], quaternion= q, organism=current_org)
         except:
             self.get_logger().warning(f'Failed to solve IK on:  {self.population.organisms[self.current_organism_number]} \n for sim time:  {time}')  
+            # if the angles can't be solved, there is nothing else to be done
+            return
         
         angles = self.ramp_up_angles(angles)
 
