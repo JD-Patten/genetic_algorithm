@@ -6,7 +6,7 @@ import rclpy
 import itertools
 import copy
  
-from genetic_algorithm.msg import PopulationStats as PopulationStatsMsg, Organism as OrganismMsg, OrganismParameter as OrganismParameterMsg
+#from genetic_algorithm.msg import PopulationStats as PopulationStatsMsg, Organism as OrganismMsg, OrganismParameter as OrganismParameterMsg
 
 from rclpy.node import Node   
 from scipy.spatial.transform import Rotation as R
@@ -34,12 +34,15 @@ ik_values_dict = {'l1': 65 * 0.001,                               # mm to m  (se
                                  
 
 # limits for parameters if they are being used in the genotype
-x_limits =      {'amplitude': [0, 30], 'period': [1.0, 5.0], 'position_shift': [-25, 25], 'time_shift': [0, 1]}
-y_limits =      {'amplitude': [0, 30], 'period': [1.0, 5.0], 'position_shift': [-25, 25], 'time_shift': [0, 1]}
-z_limits =      {'amplitude': [0, 30], 'period': [1.0, 5.0], 'position_shift': [180, 210], 'time_shift': [0, 1]}
-roll_limits =   {'amplitude': [0, 20], 'period': [1.0, 5.0], 'position_shift': [-15, 15], 'time_shift': [0, 1]}
-pitch_limits =  {'amplitude': [0, 20], 'period': [1.0, 5.0], 'position_shift': [-15, 15], 'time_shift': [0, 1]}
-yaw_limits =    {'amplitude': [0, 20], 'period': [1.0, 5.0], 'position_shift': [-15, 15], 'time_shift': [0, 1]}
+x_limits =      {'amplitude': [0, 30], 'period': [3.0, 6.0], 'position_shift': [-25, 25], 'time_shift': [0, 1]}
+y_limits =      {'amplitude': [0, 30], 'period': [3.0, 6.0], 'position_shift': [-25, 25], 'time_shift': [0, 1]}
+z_limits =      {'amplitude': [0, 30], 'period': [3.0, 6.0], 'position_shift': [180, 210], 'time_shift': [0, 1]}
+roll_limits =   {'amplitude': [0, 20], 'period': [3.0, 6.0], 'position_shift': [-15, 15], 'time_shift': [0, 1]}
+pitch_limits =  {'amplitude': [0, 20], 'period': [3.0, 6.0], 'position_shift': [-15, 15], 'time_shift': [0, 1]}
+yaw_limits =    {'amplitude': [0, 20], 'period': [3.0, 6.0], 'position_shift': [-15, 15], 'time_shift': [0, 1]}
+
+
+
 
 ik_limits =     {'l1': None, 
                  'l2': [.190,.200],
@@ -61,7 +64,7 @@ class SimulationManager(Node):
         # GA features
         self.use_planted_population = False
         self.use_fitness_scaling = False
-        self.use_ik_genes = True                         # this toggles using additional genes to control the dimensions of the end effector and long arms
+        self.use_ik_genes = False                         # this toggles using additional genes to control the dimensions of the end effector and long arms
         self.use_varied_speed = True
         self.use_constant_period = True
         self.constant_period = 1.0
@@ -77,7 +80,7 @@ class SimulationManager(Node):
         self.resolution = 6                               #number of genes (1s or 0s) per parameter
 
 
-        self.publish_joint_goal_states = False            #used to publish the arm angle goals being sent to the sim
+        self.publish_joint_goal_states = True            #used to publish the arm angle goals being sent to the sim
 
         self.running = False
         self.sub = self.create_subscription(Clock,"/clock", self.get_sim_time, 1) 
@@ -86,7 +89,7 @@ class SimulationManager(Node):
         self.angles_from_sim = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
         self.distance_traveled_pub = self.create_publisher(Float64, "/distance_traveled", 1)
-        self.population_info_pub = self.create_publisher(PopulationStatsMsg, "/pop_info",1)
+        #self.population_info_pub = self.create_publisher(PopulationStatsMsg, "/pop_info",1)
         self.lifetime_pub = self.create_publisher(Clock,"/lifetime",1)
         self.bot_pose_pub = self.create_publisher(String, "/bot_pose",1)
 
@@ -156,8 +159,6 @@ class SimulationManager(Node):
                             if parameter.name == 'period':
                                 parameter.limits = None
                                 parameter.value = self.constant_period
-
-    
                     
 
                 validated = False
@@ -180,7 +181,7 @@ class SimulationManager(Node):
 
         self.publish_pop_info(self.population)
 
-    def check_parameters(self, organism: Organism):
+    def check_parameters(self, organism: Organism, print_graph = False):
 
         """
         Used to check if a max allowable angle and a max allowable
@@ -221,23 +222,10 @@ class SimulationManager(Node):
         for i in range(int(total_time / dt)):
             time = i * dt
 
-            results = organism.solve_sin_functions(time)
-
-            x = results.get("x") * 0.001
-            y = results.get("y") * 0.001
-            z = results.get("z") * 0.001
-            roll = results.get("roll")
-            pitch = results.get("pitch")
-            yaw = results.get("yaw")
-
-            q = quaternion_from_euler(math.radians(roll), math.radians(pitch), math.radians(yaw))
-
             try:
-                angles = self.solve_inverse_kinematics(translation=[x,y,z],
-                                                      quaternion=q,
-                                                      organism=organism)
+                angles = organism.solve_inverse_kinematics(time)
             except Exception as e:
-                self.get_logger().debug(f'Failed to solve IK: {organism} \n Error: {e}')  
+                self.get_logger().info(f'Failed to solve IK: {organism} \n Error: {e}')  
                 return False
 
             #see if there is a new max angle
@@ -273,22 +261,15 @@ class SimulationManager(Node):
         
 
         # check if the robot even hits the ground:
-        if self.check_for_hit_ground:
-            if not hit_ground:
-
-                self.get_logger().debug(f'Parameters not validated due to hitting ground: {organism}')  
-
-                return False
-        
-        # Check for too large angle on any arm
-        
-        if max_angle > max_allowable_angle:
-
-            self.get_logger().debug(f'Parameters not validated due to large angle: {organism}')  
-
+        if self.check_for_hit_ground and not hit_ground:
+            self.get_logger().debug(f'Parameters not validated due to hitting ground: {organism}')  
             return False
         
-
+        # Check for too large angle on any arm
+        if max_angle > max_allowable_angle:
+            self.get_logger().debug(f'Parameters not validated due to large angle: {organism}')  
+            return False
+        
         # make organism go max speed if we're using "vary_speed" setting
         if self.use_varied_speed:
             organism.vary_speed(max_angular_velocity / max_allowable_angular_velocity)   
@@ -296,7 +277,6 @@ class SimulationManager(Node):
 
         # check for too large velocity on any arm (only if we haven't adjusted the speed above)
         elif max_angular_velocity > max_allowable_angular_velocity:
-                
             self.get_logger().debug(f'Parameters not validated due to too high angular velocity \n Parameters: {organism} \n Angular velocity: {max_angular_velocity}')  
             return False
         
@@ -380,13 +360,13 @@ class SimulationManager(Node):
                 self.angles_from_sim[3],
                 self.angles_from_sim[4],
                 self.angles_from_sim[5],
-                self.end_effector_pose.position.x,
-                self.end_effector_pose.position.y,
-                self.end_effector_pose.position.z,
-                self.end_effector_pose.orientation.x,
-                self.end_effector_pose.orientation.y,
-                self.end_effector_pose.orientation.z,
-                self.end_effector_pose.orientation.w
+                #self.end_effector_pose.position.x,
+                #self.end_effector_pose.position.y,
+                #self.end_effector_pose.position.z,
+                #self.end_effector_pose.orientation.x,
+                #self.end_effector_pose.orientation.y,
+                #self.end_effector_pose.orientation.z,
+                #self.end_effector_pose.orientation.w
             ]
 
             def format_float(value):
@@ -404,36 +384,12 @@ class SimulationManager(Node):
             return
         
         time = self.sim_time #- self.sim_time_offset 
-        current_org = self.population.organisms[self.current_organism_number]
-        values_dict = current_org.solve_sin_functions(time)
-
-
-        q = quaternion_from_euler(math.radians(values_dict.get('roll')),
-                                    math.radians(values_dict.get('pitch')),
-                                    math.radians(values_dict.get('yaw')))
-        
-
-        x = values_dict.get('x') * 0.001               #converts to meters
-        y = values_dict.get('y') * 0.001
-        z = values_dict.get('z') * 0.001           
-
-
-        #this is used for the bot_pose_pub that saves the info for blender animations
-        # this doesn't work probably because there's a delay between the goal pose and results from the sim
-        self.end_effector_pose = Pose()
-        self.end_effector_pose.position.x = x
-        self.end_effector_pose.position.y = y
-        self.end_effector_pose.position.z = z
-        self.end_effector_pose.orientation.x = q[0]
-        self.end_effector_pose.orientation.y = q[1]
-        self.end_effector_pose.orientation.z = q[2]
-        self.end_effector_pose.orientation.w = q[3]
-
+        current_org = self.population.organisms[self.current_organism_number]       
 
         try:
-            angles = self.solve_inverse_kinematics(translation=[x,y,z], quaternion= q, organism=current_org)
-        except:
-            self.get_logger().warning(f'Failed to solve IK on:  {self.population.organisms[self.current_organism_number]} \n for sim time:  {time}')  
+            angles = current_org.solve_inverse_kinematics(time)
+        except Exception as e: 
+            self.get_logger().warning(f'Failed to solve IK on organism {self.current_organism_number} \n for sim time:  {time} \n Error: {e}')  
             # if the angles can't be solved, there is nothing else to be done
             return
         
@@ -512,12 +468,15 @@ class SimulationManager(Node):
 
         for i, org in enumerate(self.population.organisms):
             self.get_logger().info(f'current population, org {i}: {org.genotype}')
+            self.get_logger().info(f'current population, org {i}: {org.get_phenotype_dict()}')
+
 
         #selection
         selected_parents = selection(self.population, self.use_fitness_scaling)
 
         for i, org in enumerate(selected_parents):
             self.get_logger().info(f'selected parents, org {i}: {org.genotype}')
+            self.get_logger().info(f'selected parents, org {i}: {org.get_phenotype_dict()}')
 
 
         #crossover
@@ -537,6 +496,8 @@ class SimulationManager(Node):
 
         for i, org in enumerate(next_generation.organisms):
             self.get_logger().info(f'offspring, org {i}: {org.genotype}')
+            self.get_logger().info(f'offspring, org {i}: {org.get_phenotype_dict()}')
+
 
 
         #mutation
@@ -545,6 +506,8 @@ class SimulationManager(Node):
 
         for i, org in enumerate(next_generation.organisms):
             self.get_logger().info(f'mutations, org {i}: {org.genotype}')
+            self.get_logger().info(f'mutations, org {i}: {org.get_phenotype_dict()}')
+
 
         self.population = next_generation
 
@@ -554,30 +517,50 @@ class SimulationManager(Node):
     
     def find_valid_mutation(self, organism: Organism, attempts = None):
 
+        mutation_frequency = self.mutation_frequency
+
         if attempts == None:
-            attempts = 100
+            attempts = 200
         
+        # first check if the provided organism is valid
+        if not self.check_parameters(organism):
+            self.get_logger().error(f"Invalid organism provided to find_valid_mutation(): {organism}")
+            return
+
         #validate a mutation of the organism
         for i in range(attempts):
             #use a copy of the organism, so the mutation isn't permanent
             organism_copy = copy.deepcopy(organism)
-            organism_copy.mutate(mutation_frequency=self.mutation_frequency)
+            organism_copy.mutate(mutation_frequency)
 
+            #check if the mutated copy is valid
             if self.check_parameters(organism_copy):
-
                 organism.genotype = organism_copy.genotype
                 organism.update_phenotype()
-
                 return
         
         self.get_logger().warn(f"Unable to produce valid mutation after {attempts} attempts")
+
+        # if a mutation can't be found withing the given number of attempts, reduce the mutation frequency each try
+        for i in range(attempts):
+            mutation_frequency *= 0.5
+
+            #check if the mutated copy is valid
+            if self.check_parameters(organism_copy):
+                organism.genotype = organism_copy.genotype
+                organism.update_phenotype()
+                return
+
+            
         return
 
     def find_valid_offspring(self, parent1: Organism, parent2: Organism) -> List[Organism]:
 
+        # get a list of all possible cut points in a random order
         possible_cut_points = list(range(len(parent1.genotype)))
         random.shuffle(possible_cut_points)
 
+        # test all possible cut points
         for cut_point in possible_cut_points:
             offspring1, offspring2 = crossover(parent1, parent2, cut_point)
             if self.check_parameters(offspring1) and self.check_parameters(offspring2):
@@ -668,3 +651,4 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+

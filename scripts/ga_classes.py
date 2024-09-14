@@ -61,7 +61,6 @@ class Substructure():
                 self.parameters.append(Parameter(limits = limits, name = param_name))
                 
         
-        
     def __repr__(self):
         return f"Substructure('{self.type}', '{self.name}', {self.limits_dict})"
     
@@ -124,7 +123,7 @@ class Organism():
     
     def update_phenotype(self):
         """
-        updates the parameter values based on the current genotype
+        updates the organisms' parameter values based on the current genotype
         """
     
         resolution = self.resolution
@@ -173,13 +172,16 @@ class Organism():
         self.genotype = []
         for substructure in self.substructures:
             for parameter in substructure.parameters:
-                start_of_range = len(self.genotype)
-                end_of_range = start_of_range + resolution
+                if parameter.used_for_genotype:
 
-                for i in range(resolution):
-                    self.genotype.append(random.choice((0,1)))
+                    # Set random genes for every parameter that is being used in the genotype
+                    start_of_range = len(self.genotype)
+                    end_of_range = start_of_range + resolution
 
-                parameter.genotype_range = (start_of_range, end_of_range)
+                    for i in range(resolution):
+                        self.genotype.append(random.choice((0,1)))
+
+                    parameter.genotype_range = (start_of_range, end_of_range)
 
         self.update_phenotype()
     
@@ -191,6 +193,53 @@ class Organism():
                 solutions_dict[substructure.name] = substructure.solve_sin_function(time)
 
         return solutions_dict
+
+    def solve_inverse_kinematics(self, time):
+
+        l1 = self.l1
+        l2 = self.l2
+
+        #get the end effector pose based on organism's sin waves
+        end_effector_pose = self.solve_sin_functions(time)
+
+        translation = [end_effector_pose['x'] * 0.001,
+                       end_effector_pose['y'] * 0.001, 
+                       end_effector_pose['z'] * 0.001]
+        
+        rotation = [end_effector_pose['roll'], 
+                    end_effector_pose['pitch'], 
+                    end_effector_pose['yaw']]
+        
+        rotation_matrix = R.from_euler('xyz', rotation, degrees = True)
+
+        #solve the inverse kinematics for the 6 arms
+        angles = []
+        for arm_number in range(6):
+
+            #rotate the end connection point
+            end_connection_point = rotation_matrix.apply(self.end_effector_arm_connections[arm_number])
+
+            #translate the end connection point so it's at the correct position in the base frame
+            end_connection_point += translation
+
+            #rotate and translate the point so it is in the servo's frame
+            end_connection_point -= self.servo_translations[arm_number]
+            end_connection_point = self.servo_rotations[arm_number].apply(end_connection_point)
+
+            x = end_connection_point[0]
+            y = end_connection_point[1]
+            z = end_connection_point[2]
+
+            #adding and subtracting the acos portion decides which of the two possible solutions to choose
+            #using if z < 0 uses different solutions for the upside down servos. this keeps the arms pointing outwards
+            if z < 0:
+                angle = math.atan2(z,y) + math.acos((l2**2 - y**2 - z**2 - x**2 - l1**2) / (-2 * l1 * math.sqrt(y**2 + z**2)))
+            else:
+                angle = math.atan2(z,y) - math.acos((l2**2 - y**2 - z**2 - x**2 - l1**2) / (-2 * l1 * math.sqrt(y**2 + z**2)))
+        
+            angles.append(angle)
+
+        return angles
 
     def vary_speed(self, multiplier):
         # iterate through all the parameters varying them if they are a period parameter
@@ -252,7 +301,6 @@ class Organism():
 
                     if parameter.limits != None:
                         warnings.warn(f'setting a constant period on parameter ({parameter.name}) with limits ({parameter.limits})')
-
 
     def set_transforms(self):
 
