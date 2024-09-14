@@ -6,7 +6,7 @@ import rclpy
 import itertools
 import copy
  
-#from genetic_algorithm.msg import PopulationStats as PopulationStatsMsg, Organism as OrganismMsg, OrganismParameter as OrganismParameterMsg
+from genetic_algorithm.msg import PopulationStats as PopulationStatsMsg, Organism as OrganismMsg
 
 from rclpy.node import Node   
 from scipy.spatial.transform import Rotation as R
@@ -30,8 +30,7 @@ ik_values_dict = {'l1': 65 * 0.001,                               # mm to m  (se
 
                   'end_connection_offset_1': 50 * 0.001,          # mm to m Distance between arm connection points 2-3, 4-5, 6-1 (used when not using ik_genes)
                   'end_connection_offset_2': 30 * 0.001,          # mm to m Distance between arm connection points 1-2, 3-4, 5-6 (used when not using ik genes)
-                  'end_connection_z_offset': -12.5 * 0.001}       # mm to m 
-                                 
+                  'end_connection_z_offset': -12.5 * 0.001}       # mm to m            
 
 # limits for parameters if they are being used in the genotype
 x_limits =      {'amplitude': [0, 30], 'period': [3.0, 6.0], 'position_shift': [-25, 25], 'time_shift': [0, 1]}
@@ -40,9 +39,6 @@ z_limits =      {'amplitude': [0, 30], 'period': [3.0, 6.0], 'position_shift': [
 roll_limits =   {'amplitude': [0, 20], 'period': [3.0, 6.0], 'position_shift': [-15, 15], 'time_shift': [0, 1]}
 pitch_limits =  {'amplitude': [0, 20], 'period': [3.0, 6.0], 'position_shift': [-15, 15], 'time_shift': [0, 1]}
 yaw_limits =    {'amplitude': [0, 20], 'period': [3.0, 6.0], 'position_shift': [-15, 15], 'time_shift': [0, 1]}
-
-
-
 
 ik_limits =     {'l1': None, 
                  'l2': [.190,.200],
@@ -54,7 +50,6 @@ ik_limits =     {'l1': None,
                  'end_connection_offset_2': [.020,.040], 
                  'end_connection_z_offset': None}
 
-
 planted_population = None
 
 class SimulationManager(Node):
@@ -64,23 +59,21 @@ class SimulationManager(Node):
         # GA features
         self.use_planted_population = False
         self.use_fitness_scaling = False
-        self.use_ik_genes = False                         # this toggles using additional genes to control the dimensions of the end effector and long arms
+        self.use_ik_genes = True                         # this toggles using additional genes to control the dimensions of the end effector and long arms
         self.use_varied_speed = True
         self.use_constant_period = True
         self.constant_period = 1.0
         self.check_for_hit_ground = False
-        
 
         # GA tuning
-        self.population_size = 6                         #number of organisms in each generation
+        self.population_size = 30                         #number of organisms in each generation
         self.mutation_frequency = 0.01                    #probability a gene is flipped during mutation
         self.crossover_frequency = 0.85
         self.max_lifetime = 12                            #seconds
         self.ramp_up_time = 0.80                          #time for new organism to go from default parameters to it's own parameters
         self.resolution = 6                               #number of genes (1s or 0s) per parameter
 
-
-        self.publish_joint_goal_states = True            #used to publish the arm angle goals being sent to the sim
+        self.publish_joint_goal_states = False            #used to publish the arm angle goals being sent to the sim
 
         self.running = False
         self.sub = self.create_subscription(Clock,"/clock", self.get_sim_time, 1) 
@@ -89,7 +82,7 @@ class SimulationManager(Node):
         self.angles_from_sim = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
         self.distance_traveled_pub = self.create_publisher(Float64, "/distance_traveled", 1)
-        #self.population_info_pub = self.create_publisher(PopulationStatsMsg, "/pop_info",1)
+        self.population_info_pub = self.create_publisher(PopulationStatsMsg, "/pop_info",1)
         self.lifetime_pub = self.create_publisher(Clock,"/lifetime",1)
         self.bot_pose_pub = self.create_publisher(String, "/bot_pose",1)
 
@@ -117,6 +110,33 @@ class SimulationManager(Node):
         self.angles_from_sim = msg.position
 
     def publish_pop_info(self, population = None):
+        
+        if population == None:
+            population = self.population
+
+        # initialize the message
+        pop_msg = PopulationStatsMsg()
+
+        # fill in the message with data on the population
+        pop_msg.current_organism = self.current_organism_number
+        pop_msg.generation_number = population.number
+        pop_msg.population_size = len(population.organisms)
+        pop_msg.population_fitness = population.total_fitness()
+        pop_msg.population_diversity = population.diversity()
+        pop_msg.organisms = []
+        
+        # fill in the information about each organism
+        for organism in population.organisms:
+            org_msg = OrganismMsg()
+            org_msg.max_distance = organism.fitness
+            org_msg.phenotype = str(organism.get_phenotype_dict())
+
+            pop_msg.organisms.append(org_msg)
+
+        # publish the message
+        self.population_info_pub.publish(pop_msg)
+
+        
         return
     
     def create_initial_population(self):
@@ -181,7 +201,7 @@ class SimulationManager(Node):
 
         self.publish_pop_info(self.population)
 
-    def check_parameters(self, organism: Organism, print_graph = False):
+    def check_parameters(self, organism: Organism):
 
         """
         Used to check if a max allowable angle and a max allowable
@@ -614,7 +634,6 @@ class SimulationManager(Node):
 
         return angles
             
-
 def quaternion_from_euler(ai, aj, ak):
     ai /= 2.0
     aj /= 2.0
