@@ -10,7 +10,6 @@ from genetic_algorithm.msg import PopulationStats as PopulationStatsMsg, Organis
 
 from rclpy.node import Node   
 from scipy.spatial.transform import Rotation as R
-
 from geometry_msgs.msg import Pose, Point, Quaternion, PoseStamped
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64, String
@@ -321,14 +320,19 @@ class SimulationManager(Node):
         return angles
 
     def get_sim_time(self, msg):
-  
+        # if not running, update the offset so when the next organism is being tested it will start at 0
         if self.running == False:
             self.sim_time_offset = self.sim_time
+        
+        # update sim time
         self.sim_time = msg.clock.sec + (msg.clock.nanosec * 0.000000001) 
+
+        # if the organism has reached the end of its simulated period, update the offset and call end of life
         if self.sim_time - self.sim_time_offset > self.max_lifetime:
             self.sim_time_offset = self.sim_time
             self.end_of_life()
 
+        # calculate and publish the time since the current organism has started being simulated
         lifetime = self.sim_time - self.sim_time_offset
         lifetime_msg = Clock() 
         lifetime_msg.clock.sec = int(lifetime)  
@@ -416,30 +420,19 @@ class SimulationManager(Node):
         angles = self.ramp_up_angles(angles)
 
         try:
-            msg1 = Float64()
-            msg1.data = angles[0]
-            
-            msg2 = Float64()
-            msg2.data = angles[1]
+            msgs = []
+            for angle in angles:
+                msg = Float64()
+                msg.data = angle
+                msgs.append(msg)
 
-            msg3 = Float64()
-            msg3.data = angles[2]
-
-            msg4 = Float64()
-            msg4.data = angles[3]
-
-            msg5 = Float64()
-            msg5.data = angles[4]
-
-            msg6 = Float64()
-            msg6.data = angles[5]
-
-            self.pub1.publish(msg1)
-            self.pub2.publish(msg2)
-            self.pub3.publish(msg3)
-            self.pub4.publish(msg4)
-            self.pub5.publish(msg5)
-            self.pub6.publish(msg6)
+            # publish the angle messages to be used in the simulation
+            self.pub1.publish(msgs[0])
+            self.pub2.publish(msgs[1])
+            self.pub3.publish(msgs[2])
+            self.pub4.publish(msgs[3])
+            self.pub5.publish(msgs[4])
+            self.pub6.publish(msgs[5])
 
         except:
             self.get_logger().info(f'Failed to publish angle messages')  
@@ -591,7 +584,6 @@ class SimulationManager(Node):
         self.get_logger().warn(f"Unable to produce valid offspring from given parents, returning the parents instead.")
         return [parent1, parent2]
 
-    def solve_inverse_kinematics(self, translation, quaternion, organism: Organism): 
         
         l1 = organism.l1
         l2 = organism.l2
@@ -634,28 +626,6 @@ class SimulationManager(Node):
 
         return angles
             
-def quaternion_from_euler(ai, aj, ak):
-    ai /= 2.0
-    aj /= 2.0
-    ak /= 2.0
-    ci = math.cos(ai)
-    si = math.sin(ai)
-    cj = math.cos(aj)
-    sj = math.sin(aj)
-    ck = math.cos(ak)
-    sk = math.sin(ak)
-    cc = ci*ck
-    cs = ci*sk
-    sc = si*ck
-    ss = si*sk
-
-    q = np.empty((4, ))
-    q[0] = cj*sc - sj*cs
-    q[1] = cj*ss + sj*cc
-    q[2] = cj*cs - sj*sc
-    q[3] = cj*cc + sj*ss
-
-    return q
             
 def main(args=None):
     rclpy.init()                        
