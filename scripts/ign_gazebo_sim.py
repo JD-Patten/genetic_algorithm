@@ -57,8 +57,8 @@ class SimulationManager(Node):
 
         # GA features
         self.use_planted_population = False
-        self.use_fitness_scaling = False
-        self.use_ik_genes = True                         # this toggles using additional genes to control the dimensions of the end effector and long arms
+        self.use_fitness_scaling = True
+        self.use_ik_genes = False                         # this toggles using additional genes to control the dimensions of the end effector and long arms
         self.use_varied_speed = True
         self.use_constant_period = True
         self.constant_period = 1.0
