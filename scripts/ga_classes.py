@@ -9,9 +9,14 @@
 # substructure - a group of parameters that tend to go together. 
 # resolution - number of bits (or genes) per parameter. ex: a resolution of 6 means 2^6 possibilites for that parameter
 
+# TODO: 
+# refactor these classes so that one substructure can be used for each population. 
+# This will require a lot of changes in the GA since the parmaeter values are read from each substructure.
+# It's not super nececary but would be nice to have and make the code more readable
 
 import random
 import math
+import copy
 from typing import List
 import warnings
 from scipy.spatial.transform import Rotation as R
@@ -19,15 +24,16 @@ from scipy.spatial.transform import Rotation as R
 
 class Parameter():
 
-    def __init__(self,  name, limits = None, value = None):
+    def __init__(self,  name, limits = None, value = None, genotype_range = None, used_for_genotype = None):
 
         self.name = name
         self.limits = limits 
         self.value = value
-        self.genotype_range = None
+        self.genotype_range = genotype_range
+        self.used_for_genotype = used_for_genotype
 
     def __repr__(self):
-        return f"Parameter('{self.name}', {self.limits}, {self.value})"
+        return f"Parameter('{self.name}', {self.limits}, {self.value},{self.genotype_range}, {self.used_for_genotype})"
     
     def validate(self):
 
@@ -44,25 +50,33 @@ class Parameter():
             self.used_for_genotype = True
 
 class Substructure():
-    def __init__(self, type, name, limits_dict):
+    def __init__(self, type, name, limits_dict, parameters = None):
         self.type = type.lower()
         self.name = name
         self.limits_dict = limits_dict
-        self.parameters: List[Parameter] = []
 
-        if type.lower() == "dof":
+        # if parameters are not given, build the list of parameters from the limits dictionary
+        if parameters == None:
+            self.parameters: List[Parameter] = []
 
-            # currently not doing anything special for dof type substructures
-            for param_name, limits in limits_dict.items():
-                self.parameters.append(Parameter(limits = limits, name = param_name))
+            if type.lower() == "dof":
 
+                # currently not doing anything special for dof type substructures
+                for param_name, limits in limits_dict.items():
+                    self.parameters.append(Parameter(limits = limits, name = param_name))
+
+            else:
+                for param_name, limits in limits_dict.items():
+                    self.parameters.append(Parameter(limits = limits, name = param_name))
+
+        # if parameters are given, make sure they are valid. This is only used for building planted populations at the moment.
         else:
-            for param_name, limits in limits_dict.items():
-                self.parameters.append(Parameter(limits = limits, name = param_name))
+            for parameter in parameters:
+                parameter.validate()
+            self.parameters = parameters
                 
-        
     def __repr__(self):
-        return f"Substructure('{self.type}', '{self.name}', {self.limits_dict})"
+        return f"Substructure('{self.type}', '{self.name}', {self.limits_dict}, {self.parameters})"
     
     def solve_sin_function(self, time):
 
@@ -114,8 +128,10 @@ class Organism():
         else:
             self.genotype = genotype
 
+        #calculate the actual values for each parameter from the genotype
         self.update_phenotype()
 
+        #set the transforms for the inverse kinematics based on the phenotype values that affect the inverse kinematics
         self.set_transforms()
     
     def __repr__(self):
@@ -128,6 +144,8 @@ class Organism():
     
         resolution = self.resolution
 
+        # for each parameter, if it's defined in the genotype, find the right binary string 
+        # and update its value to match the genotype
         for substructure in self.substructures:
             for parameter in substructure.parameters:
                 if parameter.used_for_genotype:
@@ -340,7 +358,7 @@ class Organism():
 
 class Population():
 
-    def __init__(self, organisms: List[Organism] = None, number = None):
+    def __init__(self, organisms: List[Organism] = None, number = None, genotypes = None, substructures = None, resolution = None):
         
         if organisms == None:
             self.organisms = []
@@ -349,8 +367,15 @@ class Population():
         
         self.number = number
 
+        #if genotypes are given, then the population is being built form a single set of substructures, and a list of genotypes
+        if genotypes != None:
+            self.organisms = []
+            for genotype in genotypes:
+                self.organisms.append(Organism(copy.deepcopy(substructures), resolution, genotype))
+
+
     def __repr__(self):
-        return f"Population({self.organisms}, {self.number})"
+        return f"Population(substructures={self.organisms[0].substructures}, resolution={self.organisms[0].resolution}, genotypes={self.genotypes()})"
 
     def diversity(self):
         """
@@ -408,6 +433,9 @@ class Population():
             organism.mutate(mutation_frequency)
     
         return 
+    
+    def genotypes(self):
+        return [org.genotype for org in self.organisms]
 
 def crossover(org1: Organism, org2: Organism, cut_point = None):
 
