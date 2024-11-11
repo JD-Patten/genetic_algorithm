@@ -4,7 +4,7 @@
     <xacro:property name="base_friction" value="0.75"/>
     <xacro:property name="arm_friction" value="0.28"/>
 
-    <xacro:property name="servo_height" value="0.032"/>
+    <xacro:property name="servo_height" value="0.028"/>
     <xacro:property name="draft_angle" value="-0.349066"/>
 
     <xacro:property name="_120_degrees" value="2.0944"/>
@@ -127,12 +127,12 @@
             </joint>
         </xacro:macro>
 
-        <xacro:base_collision_macro number='1' x='-0.081'   y='0.008'   radius='0.004'/>
-        <xacro:base_collision_macro number='2' x='0.033'    y='0.074'   radius='0.004'/>
-        <xacro:base_collision_macro number='3' x='0.0475'    y='0.066'   radius='0.004'/>
-        <xacro:base_collision_macro number='4' x='0.0475'    y='-0.066'  radius='0.004'/>
-        <xacro:base_collision_macro number='5' x='0.033'    y='-0.074'  radius='0.004'/>
-        <xacro:base_collision_macro number='6' x='-0.081'   y='-0.008'  radius='0.004'/>
+        <xacro:base_collision_macro number='1' x='-0.081'   y='0.008'   radius='0.0025'/>
+        <xacro:base_collision_macro number='2' x='0.033'    y='0.074'   radius='0.0025'/>
+        <xacro:base_collision_macro number='3' x='0.0475'    y='0.066'   radius='0.0025'/>
+        <xacro:base_collision_macro number='4' x='0.0475'    y='-0.066'  radius='0.0025'/>
+        <xacro:base_collision_macro number='5' x='0.033'    y='-0.074'  radius='0.0025'/>
+        <xacro:base_collision_macro number='6' x='-0.081'   y='-0.008'  radius='0.0025'/>
 
 
 
@@ -260,7 +260,7 @@
                     <pose>0 ${arm_length + 0.002} 0 0 0 0</pose>
                     <geometry>
                         <sphere>
-                            <radius>0.0060</radius>
+                            <radius>0.0025</radius>
                         </sphere>
                     </geometry>
                     
@@ -274,7 +274,7 @@
                     <pose>0 ${arm_length + 0.002} 0 0 0 0</pose>
                     <geometry>
                         <sphere>
-                            <radius>0.0060</radius>
+                            <radius>0.0025</radius>
                         </sphere>
                     </geometry>
                     <surface>       
