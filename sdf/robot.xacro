@@ -4,7 +4,7 @@
     <xacro:property name="base_friction" value="0.75"/>
     <xacro:property name="arm_friction" value="0.28"/>
 
-    <xacro:property name="servo_height" value="0.028"/>
+    <xacro:property name="servo_height" value="0.033"/>
     <xacro:property name="draft_angle" value="-0.349066"/>
 
     <xacro:property name="_120_degrees" value="2.0944"/>
@@ -242,11 +242,34 @@
                 </axis>
             </joint>
 
+            <plugin
+                filename="libignition-gazebo-joint-position-controller-system.so"
+                name="ignition::gazebo::systems::JointPositionController">
+                <joint_name>arm${number}_joint</joint_name> 
+                <joint_index>0</joint_index>
+                <p_gain>20</p_gain>
+                <i_gain>0.0</i_gain>
+                <d_gain>0.0</d_gain>
+            </plugin>
+
+        </xacro:macro>
+
+
+        <xacro:servo_macro number='1' x='${servo1_x}' y='${servo1_y}'  roll='0'                 yaw='${_120_degrees}'/>
+        <xacro:servo_macro number='2' x='${servo2_x}' y='${servo2_y}'  roll='${_180_degrees}'   yaw='${_120_degrees}'/>
+        <xacro:servo_macro number='3' x='${servo3_x}' y='${servo3_y}'  roll='0'                 yaw='0'/>
+        <xacro:servo_macro number='4' x='${servo4_x}' y='${servo4_y}'  roll='${_180_degrees}'   yaw='0'/>
+        <xacro:servo_macro number='5' x='${servo5_x}' y='${servo5_y}'  roll='0'                 yaw='${_240_degrees}'/>
+        <xacro:servo_macro number='6' x='${servo6_x}' y='${servo6_y}'  roll='${_180_degrees}'   yaw='${_240_degrees}'/>
+
+
+        <xacro:macro name='arm_collision_macro' params='number radius z_offset'>
+
             <link name='arm${number}_end_link'>
-                <pose relative_to='arm${number}_link'/>
+                <pose relative_to='arm${number}_link'> -0.0033 ${arm_length + 0.0032} ${z_offset} 0 0 0 </pose>
                 <inertial> 
                     <mass>0.001</mass>
-                    <pose>0 ${arm_length + 0.002}  0 0 0 0</pose>
+                    <pose>0 0 0 0 0 0</pose>
                     <inertia>
                         <ixx>0.0000041</ixx>
                         <ixy>0</ixy>
@@ -257,7 +280,7 @@
                     </inertia>
                 </inertial>
                 <visual name='visual'>
-                    <pose>0 ${arm_length + 0.002} 0 0 0 0</pose>
+                    <pose>0 0 0 0 0 0</pose>
                     <geometry>
                         <sphere>
                             <radius>0.0025</radius>
@@ -271,7 +294,7 @@
                     </material>
                 </visual>
                 <collision name='collision'>
-                    <pose>0 ${arm_length + 0.002} 0 0 0 0</pose>
+                    <pose>0 0 0 0 0 0</pose>
                     <geometry>
                         <sphere>
                             <radius>0.0025</radius>
@@ -294,25 +317,17 @@
                 <child>arm${number}_end_link</child>
             </joint>
 
-            <plugin
-                filename="libignition-gazebo-joint-position-controller-system.so"
-                name="ignition::gazebo::systems::JointPositionController">
-                <joint_name>arm${number}_joint</joint_name> 
-                <joint_index>0</joint_index>
-                <p_gain>20</p_gain>
-                <i_gain>0.0</i_gain>
-                <d_gain>0.0</d_gain>
-            </plugin>
-
         </xacro:macro>
 
+        <xacro:arm_collision_macro number='1' radius='0.0025' z_offset='-0.0063'/>
+        <xacro:arm_collision_macro number='2' radius='0.0025' z_offset='0.0063'/>
+        <xacro:arm_collision_macro number='3' radius='0.0025' z_offset='-0.0063'/>
+        <xacro:arm_collision_macro number='4' radius='0.0025' z_offset='0.0063'/>
+        <xacro:arm_collision_macro number='5' radius='0.0025' z_offset='-0.0063'/>
+        <xacro:arm_collision_macro number='6' radius='0.0025' z_offset='0.0063'/>
 
-        <xacro:servo_macro number='1' x='${servo1_x}' y='${servo1_y}'  roll='0'                 yaw='${_120_degrees}'/>
-        <xacro:servo_macro number='2' x='${servo2_x}' y='${servo2_y}'  roll='${_180_degrees}'   yaw='${_120_degrees}'/>
-        <xacro:servo_macro number='3' x='${servo3_x}' y='${servo3_y}'  roll='0'                 yaw='0'/>
-        <xacro:servo_macro number='4' x='${servo4_x}' y='${servo4_y}'  roll='${_180_degrees}'   yaw='0'/>
-        <xacro:servo_macro number='5' x='${servo5_x}' y='${servo5_y}'  roll='0'                 yaw='${_240_degrees}'/>
-        <xacro:servo_macro number='6' x='${servo6_x}' y='${servo6_y}'  roll='${_180_degrees}'   yaw='${_240_degrees}'/>
+
+
 
         
         <plugin filename="libignition-gazebo-pose-publisher-system.so" name="ignition::gazebo::systems::PosePublisher">

@@ -1,7 +1,7 @@
 <sdf xmlns:xacro="http://www.ros.org/wiki/xacro">
         <physics name="1ms" type="ignored">
             <max_step_size>0.005</max_step_size>
-            <real_time_factor>10.0</real_time_factor>
+            <real_time_factor>1.0</real_time_factor>
         </physics>
         <plugin
             filename="libignition-gazebo-physics-system.so"
